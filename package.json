@@ -1,0 +1,15 @@
+{
+  "name": "html-banner-backup-maker",
+    "version": "1.0.0",
+      "description": "Automatically generate animated GIF backups from GSAP-powered HTML5 banner ads, using labeled timeline steps.",
+        "main": "generate-backups.js",
+          "license": "MIT",
+            "author": "",
+              "keywords": ["gsap", "html5-banner", "gif", "puppeteer", "ad-backup", "automation"],
+                "dependencies": {
+    "puppeteer": "^23.0.0",
+      "serve-handler": "^6.1.5",
+        "sharp": "^0.33.0",
+          "gif-encoder-2": "^1.0.5"
+  }
+}
