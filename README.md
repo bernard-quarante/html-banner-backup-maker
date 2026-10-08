@@ -47,11 +47,11 @@ The only thing required in your banner's code is to add labels to your main GSAP
 const tl = gsap.timeline();
 
 tl.to('.logo', { opacity: 1, duration: 1 })
-  .addLabel('gifStep_1')
+  .addLabel('gifStep_1', '>')
   .to('.headline', { x: 0, duration: 1 })
-  .addLabel('gifStep_2')
+  .addLabel('gifStep_2', '>')
   .to('.cta', { scale: 1, duration: 0.5 })
-  .addLabel('gifStep_3');
+  .addLabel('gifStep_3', '>');
 ```
 
 **No need to expose your timeline on `window`** — the script automatically walks the entire GSAP timeline tree (via `gsap.globalTimeline`) to find whichever timeline contains your `gifStep_X` labels, no matter what variable name you used.
