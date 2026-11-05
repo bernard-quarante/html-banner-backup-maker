@@ -16,14 +16,14 @@ For a campaign with 20+ formats, that's hours of repetitive manual work.
 
 ## What this tool does instead
 
-Point it at a folder containing all your banner formats. It will, for each one:
+Point it at a folder containing all your banner formats (flat, or nested in subfolders like `FR/`, `FL/`...). It will, for each banner found:
 
 1. Launch a headless browser and load the banner locally
 2. Find the GSAP timeline containing your `gifStep_X` labels
 3. Jump (`seek`) directly to each labeled step — no need to watch the animation play in real time
 4. Screenshot the ad container at each step
 5. Assemble all steps into a single animated GIF
-6. Save everything into a `_BACKUPS` folder, automatically created next to your banner folders
+6. Save everything into a `_BACKUPS` folder, automatically created next to the banner folders it processed
 
 Run once, get all your GIF backups for the entire campaign.
 
@@ -38,6 +38,7 @@ Run once, get all your GIF backups for the entire campaign.
 git clone https://github.com/yourusername/html-banner-backup-maker.git
 cd html-banner-backup-maker
 npm install
+```
 
 ## Convention: labeling your GSAP timeline
 
@@ -56,28 +57,74 @@ tl.to('.logo', { opacity: 1, duration: 1 })
 
 **No need to expose your timeline on `window`** — the script automatically walks the entire GSAP timeline tree (via `gsap.globalTimeline`) to find whichever timeline contains your `gifStep_X` labels, no matter what variable name you used.
 
+### ⚠️ Important: always pin label position explicitly
+
+If any tween in your timeline uses relative positioning (e.g. `'<'`, `'<.8'`, `'<-0.5'`) to run in parallel with a previous one — which is extremely common, e.g. a slow background intro (`duration: 10`) running while shorter foreground tweens play in sequence — calling `.addLabel('name')` **without an explicit position** can place the label earlier than you'd expect.
+
+This happens because GSAP's default insertion point follows the sequencing cursor built from the chain of calls, not necessarily "the end of whatever is currently animating on screen". If a long tween keeps running while later short tweens are chained with overlapping offsets, the cursor can end up positioned well before the long tween finishes — and seeking there will show inconsistent, "in-between" states (which is why you might get several identical/broken-looking frames in your GIF).
+
+**Fix:** always pass an explicit position (`'>'`, `'<'`...) as the second argument to `addLabel()`:
+
+```js
+.from('.bg', { duration: 10, scale: 1.2 })
+.to('.front', { duration: 10, scale: 1.15 }, '<')
+.from('.headline', { duration: 0.6, x: 40 }, '<.8')
+.addLabel('gifStep_1', '>')   // ✅ pinned explicitly
+```
+
+As a rule of thumb: **always pass a position explicitly** on every `addLabel()` call used by this tool, even if your current timeline doesn't seem to need it.
+
 ### Custom delay per step (optional)
 
 By default, every frame in the final GIF uses the delay configured in `CONFIG.frameDelay` (3 seconds). To override the delay for a specific step, append the duration (in seconds) to the label name:
 
 ```js
-.addLabel('gifStep_1')        // uses default delay
-.addLabel('gifStep_2_5')      // 5 seconds for this step
-.addLabel('gifStep_3_1.5')    // 1.5 seconds for this step
+.addLabel('gifStep_1', '>')        // uses default delay
+.addLabel('gifStep_2_5', '>')      // 5 seconds for this step
+.addLabel('gifStep_3_1.5', '>')    // 1.5 seconds for this step
+```
+
+### Helper: auto-numbered labels (optional)
+
+To avoid manually numbering labels across banners with varying step counts, add this once in your banner's script, before creating the timeline:
+
+```js
+gsap.Timeline.prototype.gifStep = function (position = '>', delay = null) {
+  this.__gifStepCount = (this.__gifStepCount || 0) + 1;
+  const suffix = delay !== null ? `_${delay}` : '';
+  return this.addLabel(`gifStep_${this.__gifStepCount}${suffix}`, position);
+};
+```
+
+Usage:
+
+```js
+tl.from('.headline', { duration: 0.6, x: 40 })
+  .gifStep()           // → gifStep_1, position '>', default delay
+  .from('.subline', { duration: 0.5, x: 60 }, '<.2')
+  .gifStep('<', 5)      // → gifStep_2_5, position '<', 5s delay
+  .from('.cta', { duration: 0.4, scale: 0 })
+  .gifStep('>', 1.5)    // → gifStep_3_1.5
 ```
 
 ## Usage
 
-1. Organize your campaign folder with each banner format in its own subfolder, each containing an `index.html`:
+1. Organize your campaign folder with each banner format in its own subfolder, each containing an `index.html` — flat or nested:
 
 ```
 my-campaign/
   banner-300x250/index.html
   banner-728x90/index.html
-  banner-160x600/index.html
+
+# or nested:
+my-campaign/
+  FR/
+    banner-300x250/index.html
+  EN/
+    banner-300x250/index.html
 ```
 
-2. From inside that folder, run:
+2. From inside that root folder, run:
 
 ```bash
 node /path/to/html-banner-backup-maker/generate-backups.js
@@ -89,17 +136,24 @@ node /path/to/html-banner-backup-maker/generate-backups.js
 🔁 Number of loops for the GIFs (0 = infinite, Enter = default 3):
 ```
 
-4. Result:
+4. Result — a `_BACKUPS` folder is created next to every group of banner folders found:
 
 ```
 my-campaign/
   _BACKUPS/
     banner-300x250.gif
     banner-728x90.gif
-    banner-160x600.gif
   banner-300x250/
   banner-728x90/
-  banner-160x600/
+
+# or, for the nested case:
+my-campaign/
+  FR/
+    _BACKUPS/banner-300x250.gif
+    banner-300x250/
+  EN/
+    _BACKUPS/banner-300x250.gif
+    banner-300x250/
 ```
 
 Banners without `gifStep_X` labels are automatically skipped (with a warning), so you can run this on a campaign folder even if only some formats have been updated yet.
@@ -115,14 +169,15 @@ const CONFIG = {
   labelPattern: /^gifStep_(\d+)(?:_(\d+(?:\.\d+)?))?$/,
   frameDelay: 3,               // default seconds per frame
   loopCount: 3,                // default, overridden by the prompt
-  quality: 10,                  // GIF encoder quality (1 = best/slowest, 30 = fastest/lower quality)
   viewport: { width: 2000, height: 2000 },
   excludeFolders: ['_BACKUPS', 'node_modules', '.git'],
+  maxDepth: 6,                  // max recursion depth when scanning nested folders
 };
 ```
 
 ## Technical notes (a few traps worth knowing)
 
+- **Color rendering**: GIF encoding uses [`gifenc`](https://github.com/mattdesl/gifenc) for better color fidelity than older quantizers — install with `npm install gifenc`.
 - **GSAP timelines autoplay by default.** The script patches `gsap.timeline()` (only inside the headless browser context, your banner's source code is never touched) to force every timeline to start paused — otherwise, by the time the script is ready to seek, your animation may have already played past the point you wanted to capture.
 - **`.seek()` returns the timeline instance itself** (for chaining). Returning that from `page.evaluate()` makes Puppeteer try to serialize a huge, complex object across the browser/Node boundary — which can hang for a very long time. Always wrap it in a block so nothing is returned: `page.evaluate((t) => { tl.seek(t, true); }, time)`.
 - **GIF loop count is off by one.** The GIF89a spec's "repeat" field means "repetitions *after* the first playthrough", not "total plays". Requesting 2 loops from the user means passing `1` to the encoder (`0` stays reserved for infinite).
