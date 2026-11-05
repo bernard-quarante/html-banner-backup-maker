@@ -89,7 +89,7 @@ By default, every frame in the final GIF uses the delay configured in `CONFIG.fr
 To avoid manually numbering labels across banners with varying step counts, add this once in your banner's script, before creating the timeline:
 
 ```js
-gsap.Timeline.prototype.gifStep = function (position = '>', delay = null) {
+gsap.core.Timeline.prototype.gifStep = function (position = '>', delay = null) {
   this.__gifStepCount = (this.__gifStepCount || 0) + 1;
   const suffix = delay !== null ? `_${delay}` : '';
   return this.addLabel(`gifStep_${this.__gifStepCount}${suffix}`, position);

@@ -24,28 +24,23 @@ const CONFIG = {
 function findBannerFolders(rootDir, depth = 0) {
   const results = [];
   if (depth > CONFIG.maxDepth) return results;
-
   let entries;
   try {
     entries = fs.readdirSync(rootDir, { withFileTypes: true });
   } catch {
     return results;
   }
-
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     if (entry.name.startsWith('.')) continue;
     if (CONFIG.excludeFolders.includes(entry.name)) continue;
-
     const fullPath = path.join(rootDir, entry.name);
-
     if (fs.existsSync(path.join(fullPath, 'index.html'))) {
       results.push({ bannerDir: fullPath, bannerName: entry.name, groupDir: rootDir });
     } else {
       results.push(...findBannerFolders(fullPath, depth + 1));
     }
   }
-
   return results;
 }
 
@@ -112,35 +107,23 @@ async function makeGif(frames, finalOutputPath, loopCount) {
   const firstMeta = await sharp(frames[0].path).metadata();
   const width = firstMeta.width;
   const height = firstMeta.height;
-
   const gif = GIFEncoder();
   const repeat = loopCount === 0 ? 0 : loopCount - 1;
-
   for (const frame of frames) {
     const { data } = await sharp(frame.path)
       .resize(width, height)
       .ensureAlpha()
       .raw()
       .toBuffer({ resolveWithObject: true });
-
     for (let i = 3; i < data.length; i += 4) data[i] = 255;
-
     const palette = quantize(data, 256);
     const index = applyPalette(data, palette);
-
-    gif.writeFrame(index, width, height, {
-      palette,
-      delay: frame.delaySec * 1000,
-      repeat,
-    });
+    gif.writeFrame(index, width, height, { palette, delay: frame.delaySec * 1000, repeat });
   }
-
   gif.finish();
-
   const tmpGifPath = path.join(os.tmpdir(), 'gif-backup-maker', `${Date.now()}-${path.basename(finalOutputPath)}`);
   fs.mkdirSync(path.dirname(tmpGifPath), { recursive: true });
   fs.writeFileSync(tmpGifPath, gif.bytes());
-
   fs.mkdirSync(path.dirname(finalOutputPath), { recursive: true });
   fs.copyFileSync(tmpGifPath, finalOutputPath);
   fs.rmSync(tmpGifPath, { force: true });
@@ -148,7 +131,6 @@ async function makeGif(frames, finalOutputPath, loopCount) {
 
 async function processBanner(browser, bannerDir, bannerName, loopCount, outputDir, label) {
   console.log(`\n▶ ${label}`);
-
   const { server, port } = await startServer(bannerDir);
   const page = await browser.newPage();
   await page.setViewport(CONFIG.viewport);
@@ -197,7 +179,7 @@ async function processBanner(browser, bannerDir, bannerName, loopCount, outputDi
           }
           return search(gsap.globalTimeline);
         },
-        { timeout: 4000 },
+        { timeout: 15000 },
         CONFIG.labelPattern.source
       );
       hasLabels = true;
@@ -229,10 +211,8 @@ async function processBanner(browser, bannerDir, bannerName, loopCount, outputDi
     for (const step of steps) {
       await withTimeout(page.evaluate((t) => { window.__gifTL.seek(t, true); }, step.time), 10000, `seek ${step.name}`);
       await new Promise((r) => setTimeout(r, 150));
-
       const framePath = path.join(tmpDir, `frame_${step.step}.png`);
       await withTimeout(adHandle.screenshot({ path: framePath }), 5000, `screenshot ${step.name}`);
-
       frames.push({ path: framePath, delaySec: step.customDelay ?? CONFIG.frameDelay });
       console.log(`  ✓ ${step.name} captured`);
     }
@@ -252,7 +232,6 @@ async function processBanner(browser, bannerDir, bannerName, loopCount, outputDi
 
 (async () => {
   const bannerFolders = findBannerFolders(CONFIG.campaignDir);
-
   console.log(`📁 Root: ${CONFIG.campaignDir}`);
   console.log(`${bannerFolders.length} banner(s) detected.`);
 
